@@ -6,7 +6,7 @@ This repository presents a reproduction of the original [BitDistiller](https://g
 
 ## Related Work: BitDistiller Reproduction for Llama3.2-1B (by Teammate)
 
-My teammate, [EricBennetts](https://github.com/EricBennetts), has also successfully reproduced the BitDistiller methodology, focusing on the Llama3.2-1B model. Their work includes:
+My teammate, [EricBennetts](https://github.com/EricBennetts), has also successfully reproduced the BitDistiller methodology, focusing on the Llama3.2-1B model. His work includes:
 
 *   2-bit quantization of Llama3.2-1B.
 *   Perplexity (PPL) evaluation of the quantized model.
