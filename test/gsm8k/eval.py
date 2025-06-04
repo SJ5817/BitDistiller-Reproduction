@@ -87,8 +87,8 @@ def parse(lines):
     return all_ans
 
 def eval_json(json_path, mode='test'):
+    origin_json_path = json_path
     if json_path.endswith('/') or not json_path.endswith('json'):
-        origin_json_path = json_path
         json_path = os.path.join(json_path, 'raw_generation_greedy.json')
     if not os.path.exists(json_path):
         lines = []

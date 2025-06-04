@@ -331,11 +331,8 @@ def train():
         print("loading Teacher Model...")
         teacher_model = transformers.AutoModelForCausalLM.from_pretrained(
             model_args.model_name_or_path,
-            load_in_4bit=False,
-            load_in_8bit=False,
             torch_dtype=torch.bfloat16,
-            device_map=device_map,
-            max_memory=max_memory,
+            device_map=device_map
         )
         teacher_model.eval()
         teacher_model.cuda()

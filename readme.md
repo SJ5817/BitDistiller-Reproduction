@@ -1,3 +1,71 @@
+# BitDistiller Reproduction and Modification
+
+This repository is a reproduction of the [BitDistiller](https://github.com/DD-DuDa/BitDistiller) work, with some code modifications to enable 2-bit quantization and gsm8k testing of the [MetaMath-7B-V1.0](https://huggingface.co/meta-math/MetaMath-7B-V1.0) model on the following configuration.
+
+**Hardware Configuration:**
+
+*   GPU: 4x NVIDIA A40 (48GB each)
+*   CPU: 60-core AMD EPYC 7543 32-Core Processor
+*   RAM: 320GB
+
+**Key Results:**
+
+After 2-bit quantization, an accuracy of approximately **44.44%** was achieved on the gsm8k test set (583 correct out of 1312 questions). This result is comparable to the accuracy reported in the original paper (51.02%). This is the quantization result for 7B MetaMath with g128 2-bit configuration.
+
+| **MetaMath-7B-V1.0**     | **GSM8K**                 |
+| :----------------------: | :-----------------------: |
+|                          | Accuracy (correct/error)  |
+| **2bit/g128**            | 44.43% (583/1312)         |
+
+**Training Details & Code Adjustments:**
+
+*   The model was trained for **2 epochs**.
+*   The total training time was approximately **2-3 hours**.
+*   The original DeepSpeed parameters were largely unchanged, with the exception of:
+    *   `--per_device_train_batch_size 4`
+    *   `--per_device_eval_batch_size 4`
+    *   `--gradient_accumulation_steps 4`
+*   All 4 GPUs utilized approximately **40GB of VRAM** each.
+*   System RAM usage was around **160GB** (due to optimizer offloading - DeepSpeed Stage 2).
+*   To manage storage space (as each checkpoint is around 100GB) and save training time, the following Hugging Face Trainer arguments were adjusted:
+    *   `--eval_steps 10`
+    *   `--save_strategy "steps"`
+    *   `--save_steps 10`
+    *   `--save_total_limit 2`
+*   The training loss remained around **20** in the later stages.
+*   **Modifications to `train.py` for Checkpoint Resumption:** The original BitDistiller code saved checkpoints during training but lacked functionality to resume training from these checkpoints. Minor modifications were made to `train.py` to correctly load and resume from a saved checkpoint, facilitating continued training runs.
+*   **Adjustment in `gsm8k/eval.py`:** A potential issue was identified in the `eval_json` function within `gsm8k/eval.py` where the variable `origin_json_path` could be used before it was assigned a value under certain path conditions. The relevant code block was adjusted to ensure `origin_json_path` is always initialized.
+*   **Modification in `train.py` for Teacher Model Loading (around line 332):** To prevent potential errors during teacher model loading, the following change was made:
+    Original code:
+    ```python
+    teacher_model = transformers.AutoModelForCausalLM.from_pretrained(
+        model_args.model_name_or_path,
+        load_in_4bit=False,
+        load_in_8bit=False,
+        torch_dtype=torch.bfloat16,
+        device_map=device_map,
+        max_memory=max_memory,
+    )
+    ```
+    Modified code:
+    ```python
+    teacher_model = transformers.AutoModelForCausalLM.from_pretrained(
+        model_args.model_name_or_path,
+        torch_dtype=torch.bfloat16,
+        device_map=device_map
+    )
+    ```
+
+**Training Configuration:**
+
+For more detailed training configurations and scripts, please refer to the `train/train.sh` file.
+
+**NOTICE:** The final configurations in this "reproduction project" are **only** suitable for training a 2-bit quantized 7B MetaMath model on a 4-GPU setup.
+
+---
+
+Below is the README file from the original project. Specific procedures can be referenced there.
+
 # [ACL 2024] BitDistiller: Unleashing the Potential of Sub-4-Bit LLMs via Self-Distillation [[paper]](http://arxiv.org/abs/2402.10631)
 
 **Implementing efficient sub-4-bit weight quantization (3 / 2 bits) in LLMs through advanced QAT-based Self-Distillation techniques.**
