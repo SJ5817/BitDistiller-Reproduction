@@ -182,7 +182,8 @@ class SupervisedDataset(Dataset):
             lines = f.readlines()
         all_dataset = [json.loads(line.strip()) for line in lines]
 
-        sources, targets = zip(*[(s[0][0], f"{s[0][1]}{tokenizer.eos_token}") for s in all_dataset])
+        # sources, targets = zip(*[(s[0][0], f"{s[0][1]}{tokenizer.eos_token}") for s in all_dataset])
+        sources, targets = zip(*[(s["query"], f"{s['response']}{tokenizer.eos_token}") for s in all_dataset])
 
         dataset_size = len(sources)
         max_sample = min(max_sample or dataset_size, dataset_size)
@@ -257,6 +258,22 @@ def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer, dat
     eval_dataset = SupervisedDataset(tokenizer=tokenizer, data_path=data_args.data_path, max_sample=data_args.max_train_samples, split="eval")
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     return dict(train_dataset=train_dataset, eval_dataset=eval_dataset, data_collator=data_collator)
+
+
+def find_latest_checkpoint(output_dir):
+    """Find the latest checkpoint in the output directory."""
+    if not os.path.exists(output_dir):
+        return None
+    
+    checkpoints = glob.glob(os.path.join(output_dir, "checkpoint-*"))
+    if not checkpoints:
+        return None
+    
+    # Sort by checkpoint number
+    checkpoints.sort(key=lambda x: int(x.split('-')[-1]))
+    latest_checkpoint = checkpoints[-1]
+    
+    return latest_checkpoint
 
 
 def train():
@@ -381,7 +398,19 @@ def train():
         trainer = KDTrainer(model=model, tokenizer=tokenizer, teacher_model=teacher_model, loss_type=training_args.kd_loss_type, mean_prob=mean_prob, args=training_args, **data_module)
     else:
         trainer = Trainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
-    trainer.train()
+
+    latest_checkpoint = None
+    latest_checkpoint = find_latest_checkpoint("./ckpts/MetaMath-7b/int2-g128/")
+    if latest_checkpoint:
+        print(f"Found and resuming from latest checkpoint: {latest_checkpoint}")
+    else:
+         print("No checkpoint found. Starting training from scratch.")
+    
+    if latest_checkpoint:
+        trainer.train(resume_from_checkpoint=latest_checkpoint)
+    else:
+        trainer.train()
+    
     trainer.save_state()
     safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
 
