@@ -1,23 +1,56 @@
-# BitDistiller Reproduction and Modification
+# BitDistiller Reproduction and Modification for MetaMath-7B-V1.0
 
-This repository is a reproduction of the [BitDistiller](https://github.com/DD-DuDa/BitDistiller) work, with some code modifications to enable 2-bit quantization and gsm8k testing of the [MetaMath-7B-V1.0](https://huggingface.co/meta-math/MetaMath-7B-V1.0) model on the following configuration.
+This repository presents a reproduction of the original [BitDistiller](https://github.com/DD-DuDa/BitDistiller) work. It includes modifications to the codebase to enable 2-bit quantization and gsm8k testing specifically for the [MetaMath-7B-V1.0](https://huggingface.co/meta-math/MetaMath-7B-V1.0) model.
 
-**Hardware Configuration:**
+---
 
-*   GPU: 4x NVIDIA A40 (48GB each)
-*   CPU: 60-core AMD EPYC 7543 32-Core Processor
-*   RAM: 320GB
+## Related Work: BitDistiller Reproduction for Llama3.2-1B (by Teammate)
 
-**Key Results:**
+My teammate, [EricBennetts](https://github.com/EricBennetts), has also successfully reproduced the BitDistiller methodology, focusing on the Llama3.2-1B model. Their work includes:
 
-After 2-bit quantization, an accuracy of approximately **44.44%** was achieved on the gsm8k test set (583 correct out of 1312 questions). This result is comparable to the accuracy reported in the original paper (51.02%). This is the quantization result for 7B MetaMath with g128 2-bit configuration.
+*   2-bit quantization of Llama3.2-1B.
+*   Perplexity (PPL) evaluation of the quantized model.
+*   Inference speed comparison.
+
+You can find their complete implementation and results here:
+➡️ **[BitDistiller-Reproduced by EricBennetts](https://github.com/EricBennetts/BitDistiller-Reproduced)**
+
+---
+
+## Project Setup: MetaMath-7B-V1.0 Reproduction
+
+This section details the environment and hardware used for the MetaMath-7B-V1.0 reproduction.
+
+### Hardware Configuration
+
+*   **GPU:** 4x NVIDIA A40 (48GB each)
+*   **CPU:** 60-core AMD EPYC 7543 32-Core Processor
+*   **RAM:** 320GB
+
+### Software Environment
+
+*   **Python:** `3.9.x`
+*   **PyTorch:** Approximately `2.5.1` (with CUDA 12.1 support).
+    *   *Note: The exact PyTorch minor version is not precisely recalled. It is crucial to install a PyTorch version compatible with **CUDA 12.1**. You can find the correct installation command on the [official PyTorch website](https://pytorch.org/get-started/locally/) by selecting your OS, package manager (pip/conda), Python 3.9, and CUDA 12.1. For example, a compatible version might look like `torch==2.2.0+cu121` or similar.*
+*   **CUDA Toolkit:** `12.1` (Ensure your NVIDIA drivers are also compatible)
+
+**⚠️ Important Note for `transformers` library:**
+
+If you intend to use a `transformers` library version **greater than `4.46.0`** (e.g., `4.46.1` or newer), you **must** modify the `./train/train.sh` script.
+
+Specifically, you will need to change the argument name related to evaluation steps in ./train/train.sh:
+*   **Change 'evaluation_step' to 'eval_step'**, as 'evaluation_step' is deprecated in `transformers` v4.46.0 and later.
+
+## Key Results for MetaMath-7B-V1.0 (2-bit Quantization)
+
+After 2-bit quantization (g128 configuration), an accuracy of approximately **44.44%** was achieved on the gsm8k test set (583 correct out of 1312 questions). This result is comparable to the accuracy reported in the original BitDistiller paper (51.02% for their model and setup).
 
 | **MetaMath-7B-V1.0**     | **GSM8K**                 |
 | :----------------------: | :-----------------------: |
 |                          | Accuracy (correct/error)  |
 | **2bit/g128**            | 44.43% (583/1312)         |
 
-**Training Details & Code Adjustments:**
+## Training Details for MetaMath-7B-V1.0
 
 *   The model was trained for **2 epochs**.
 *   The total training time was approximately **2-3 hours**.
@@ -34,62 +67,83 @@ After 2-bit quantization, an accuracy of approximately **44.44%** was achieved o
     *   `--save_total_limit 2`
 *   The training loss remained around **20** in the later stages.
 
-*   **Important Configuration Notes:**
-    *   **`./test/gsm8k/test.py` GPU Configuration (around line 202):** Users need to adjust the GPU count and `max_memory` settings in `test.py` to match their hardware. The relevant original code snippet is:
-        ```python
-        n_gpus = torch.cuda.device_count()
-        max_memory = f'80000MB' # Needs adjustment
-        max_memory = {i: max_memory for i in range(n_gpus)}
-        ```
-    *   **`./train/train.sh` GPU Count:** Ensure the GPU count specified or implied in `train.sh` (e.g., via `CUDA_VISIBLE_DEVICES` or DeepSpeed arguments) matches your available hardware.
+For more detailed training configurations and scripts, please refer to the `train/train.sh` file.
 
-*   **Implementing Checkpoint Resumption in `./train/train.py`:** The original `train.py` lacked explicit logic for resuming from saved checkpoints. The following modifications were made:
-    1.  **Added `find_latest_checkpoint` function:** This helper function was added to `train.py` to locate the most recent checkpoint in a specified directory.
-        ```python
-        import glob # Ensure glob is imported
-        import os   # Ensure os is imported
+## Code Modifications & Configuration Notes for MetaMath-7B-V1.0
 
-        def find_latest_checkpoint(output_dir):
-            """Find the latest checkpoint in the output directory."""
-            if not os.path.exists(output_dir):
-                return None
-            
-            checkpoints = glob.glob(os.path.join(output_dir, "checkpoint-*"))
-            if not checkpoints:
-                return None
-            
-            # Sort by checkpoint number (extracting the integer part)
-            checkpoints.sort(key=lambda x: int(x.split('-')[-1]))
-            latest_checkpoint = checkpoints[-1]
-            
-            return latest_checkpoint
-        ```
-    2.  **Modified `trainer.train()` call (around original line 384):** The training invocation was updated to use the `find_latest_checkpoint` function and the `resume_from_checkpoint` argument of the Hugging Face Trainer.
-        ```python
-        # --- Original call (example) ---
-        # trainer.train()
+The following adjustments and configurations are crucial for running this specific reproduction.
 
-        # --- Modified call ---
-        # IMPORTANT: Adjust the path to your checkpoint directory as needed.
-        checkpoint_dir = "./ckpts/MetaMath-7b/int2-g128/" # Example path
-        latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
+### 1. GPU Configuration in `test.py`
+
+*   **File:** `./test/gsm8k/test.py`
+*   **Action:** Users need to adjust the GPU count and `max_memory` settings (around line 202) to match their hardware.
+    ```python
+    # Original relevant snippet in test.py (around line 202)
+    n_gpus = torch.cuda.device_count()
+    max_memory = f'80000MB' # Needs adjustment based on your GPU VRAM
+    max_memory = {i: max_memory for i in range(n_gpus)}
+    ```
+
+### 2. GPU Count in `train.sh`
+
+*   **File:** `./train/train.sh`
+*   **Action:** Ensure the GPU count specified or implied in `train.sh` (e.g., via `CUDA_VISIBLE_DEVICES` or DeepSpeed arguments like `--num_gpus`) matches your available hardware.
+
+### 3. Checkpoint Resumption Implementation
+
+The original `train.py` lacked explicit logic for resuming from saved checkpoints. The following modifications were made in `./train/train.py`:
+
+*   **Added `find_latest_checkpoint` function:**
+    ```python
+    import glob # Ensure glob is imported
+    import os   # Ensure os is imported
+
+    def find_latest_checkpoint(output_dir):
+        """Find the latest checkpoint in the output directory."""
+        if not os.path.exists(output_dir):
+            return None
         
-        if latest_checkpoint:
-            print(f"Found and resuming from latest checkpoint: {latest_checkpoint}")
-        else:
-            print(f"No checkpoint found in {checkpoint_dir}. Starting training from scratch.")
+        checkpoints = glob.glob(os.path.join(output_dir, "checkpoint-*"))
+        if not checkpoints:
+            return None
         
-        # Start training
-        if latest_checkpoint:
-            trainer.train(resume_from_checkpoint=latest_checkpoint)
-        else:
-            trainer.train()
-        ```
-        **Note:** The path `"./ckpts/MetaMath-7b/int2-g128/"` provided to `find_latest_checkpoint` is an example and **must be adjusted** by the user to point to their actual checkpoint output directory specified in `TrainingArguments`.
+        # Sort by checkpoint number (extracting the integer part)
+        checkpoints.sort(key=lambda x: int(x.split('-')[-1]))
+        latest_checkpoint = checkpoints[-1]
+        
+        return latest_checkpoint
+    ```
+*   **Modified `trainer.train()` call (around original line 384):**
+    ```python
+    # --- Modified call in train.py ---
+    # IMPORTANT: Adjust the path to your checkpoint directory as needed.
+    # This path should match the 'output_dir' in your TrainingArguments.
+    checkpoint_dir = "./ckpts/MetaMath-7b/int2-g128/" # Example path, **MUST BE ADJUSTED BY USER**
+    latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
+    
+    if latest_checkpoint:
+        print(f"Found and resuming from latest checkpoint: {latest_checkpoint}")
+    else:
+        print(f"No checkpoint found in {checkpoint_dir}. Starting training from scratch.")
+    
+    # Start training
+    if latest_checkpoint:
+        trainer.train(resume_from_checkpoint=latest_checkpoint)
+    else:
+        trainer.train()
+    ```
 
-*   **Adjustment in `./test/gsm8k/eval.py`:** A potential issue was identified in the `eval_json` function within `gsm8k/eval.py` where the variable `origin_json_path` could be used before it was assigned a value under certain path conditions. The relevant code block was adjusted to ensure `origin_json_path` is always initialized.
+### 4. Adjustment in `gsm8k/eval.py`
 
-*   **Modification in `./train/train.py` for Teacher Model Loading (around line 332):** To prevent potential errors during teacher model loading, the following change was made:
+*   **File:** `./test/gsm8k/eval.py`
+*   **Issue:** A potential issue was identified in the `eval_json` function where the variable `origin_json_path` could be used before assignment under certain path conditions.
+*   **Action:** The relevant code block was adjusted to ensure `origin_json_path` is always initialized before use. (Users should verify this change if encountering issues or refer to the commit history for the exact modification).
+
+### 5. Teacher Model Loading in `train.py`
+
+*   **File:** `./train/train.py` (around line 332)
+*   **Issue:** To prevent potential errors during teacher model loading with specific quantization flags.
+*   **Modification:**
     Original code:
     ```python
     teacher_model = transformers.AutoModelForCausalLM.from_pretrained(
@@ -101,24 +155,26 @@ After 2-bit quantization, an accuracy of approximately **44.44%** was achieved o
         max_memory=max_memory,
     )
     ```
-    Modified code:
+    Modified code (removed explicit `load_in_4bit` and `load_in_8bit` which might conflict if `device_map` is used for distribution, and `max_memory` if not carefully set):
     ```python
     teacher_model = transformers.AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path,
         torch_dtype=torch.bfloat16,
         device_map=device_map
+        # If max_memory is still needed, ensure it's configured correctly for your setup.
     )
     ```
 
-**Training Configuration:**
+## Important Notice
 
-For more detailed training configurations and scripts, please refer to the `train/train.sh` file.
-
-**NOTICE:** The final configurations in this "reproduction project" are **only** suitable for training a 2-bit quantized 7B MetaMath model on a 4-GPU setup.
+The final configurations detailed in this "reproduction project" are **specifically tailored** for training a 2-bit quantized MetaMath-7B-V1.0 model on a 4-GPU (NVIDIA A40) setup. Adjustments will likely be necessary for different hardware or model configurations.
 
 ---
 
-Below is the README file from the original project. Specific procedures can be referenced there.
+## Original BitDistiller Project
+
+For the original BitDistiller paper, codebase, and procedures, please refer to their repository:
+[DD-DuDa/BitDistiller](https://github.com/DD-DuDa/BitDistiller)
 
 # [ACL 2024] BitDistiller: Unleashing the Potential of Sub-4-Bit LLMs via Self-Distillation [[paper]](http://arxiv.org/abs/2402.10631)
 
