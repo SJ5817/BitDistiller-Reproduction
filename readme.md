@@ -33,9 +33,63 @@ After 2-bit quantization, an accuracy of approximately **44.44%** was achieved o
     *   `--save_steps 10`
     *   `--save_total_limit 2`
 *   The training loss remained around **20** in the later stages.
-*   **Modifications to `train.py` for Checkpoint Resumption:** The original BitDistiller code saved checkpoints during training but lacked functionality to resume training from these checkpoints. Minor modifications were made to `train.py` to correctly load and resume from a saved checkpoint, facilitating continued training runs.
-*   **Adjustment in `gsm8k/eval.py`:** A potential issue was identified in the `eval_json` function within `gsm8k/eval.py` where the variable `origin_json_path` could be used before it was assigned a value under certain path conditions. The relevant code block was adjusted to ensure `origin_json_path` is always initialized.
-*   **Modification in `train.py` for Teacher Model Loading (around line 332):** To prevent potential errors during teacher model loading, the following change was made:
+
+*   **Important Configuration Notes:**
+    *   **`./test/gsm8k/test.py` GPU Configuration (around line 202):** Users need to adjust the GPU count and `max_memory` settings in `test.py` to match their hardware. The relevant original code snippet is:
+        ```python
+        n_gpus = torch.cuda.device_count()
+        max_memory = f'80000MB' # Needs adjustment
+        max_memory = {i: max_memory for i in range(n_gpus)}
+        ```
+    *   **`./train/train.sh` GPU Count:** Ensure the GPU count specified or implied in `train.sh` (e.g., via `CUDA_VISIBLE_DEVICES` or DeepSpeed arguments) matches your available hardware.
+
+*   **Implementing Checkpoint Resumption in `./train/train.py`:** The original `train.py` lacked explicit logic for resuming from saved checkpoints. The following modifications were made:
+    1.  **Added `find_latest_checkpoint` function:** This helper function was added to `train.py` to locate the most recent checkpoint in a specified directory.
+        ```python
+        import glob # Ensure glob is imported
+        import os   # Ensure os is imported
+
+        def find_latest_checkpoint(output_dir):
+            """Find the latest checkpoint in the output directory."""
+            if not os.path.exists(output_dir):
+                return None
+            
+            checkpoints = glob.glob(os.path.join(output_dir, "checkpoint-*"))
+            if not checkpoints:
+                return None
+            
+            # Sort by checkpoint number (extracting the integer part)
+            checkpoints.sort(key=lambda x: int(x.split('-')[-1]))
+            latest_checkpoint = checkpoints[-1]
+            
+            return latest_checkpoint
+        ```
+    2.  **Modified `trainer.train()` call (around original line 384):** The training invocation was updated to use the `find_latest_checkpoint` function and the `resume_from_checkpoint` argument of the Hugging Face Trainer.
+        ```python
+        # --- Original call (example) ---
+        # trainer.train()
+
+        # --- Modified call ---
+        # IMPORTANT: Adjust the path to your checkpoint directory as needed.
+        checkpoint_dir = "./ckpts/MetaMath-7b/int2-g128/" # Example path
+        latest_checkpoint = find_latest_checkpoint(checkpoint_dir)
+        
+        if latest_checkpoint:
+            print(f"Found and resuming from latest checkpoint: {latest_checkpoint}")
+        else:
+            print(f"No checkpoint found in {checkpoint_dir}. Starting training from scratch.")
+        
+        # Start training
+        if latest_checkpoint:
+            trainer.train(resume_from_checkpoint=latest_checkpoint)
+        else:
+            trainer.train()
+        ```
+        **Note:** The path `"./ckpts/MetaMath-7b/int2-g128/"` provided to `find_latest_checkpoint` is an example and **must be adjusted** by the user to point to their actual checkpoint output directory specified in `TrainingArguments`.
+
+*   **Adjustment in `./test/gsm8k/eval.py`:** A potential issue was identified in the `eval_json` function within `gsm8k/eval.py` where the variable `origin_json_path` could be used before it was assigned a value under certain path conditions. The relevant code block was adjusted to ensure `origin_json_path` is always initialized.
+
+*   **Modification in `./train/train.py` for Teacher Model Loading (around line 332):** To prevent potential errors during teacher model loading, the following change was made:
     Original code:
     ```python
     teacher_model = transformers.AutoModelForCausalLM.from_pretrained(
