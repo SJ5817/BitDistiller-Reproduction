@@ -12,7 +12,7 @@ My teammate, [EricBennetts](https://github.com/EricBennetts), has also successfu
 *   Perplexity (PPL) evaluation of the quantized model.
 *   Inference speed comparison.
 
-You can find their complete implementation and results here:
+You can find his complete implementation and results here:
 ➡️ **[BitDistiller-Reproduced by EricBennetts](https://github.com/EricBennetts/BitDistiller-Reproduced)**
 
 ---
